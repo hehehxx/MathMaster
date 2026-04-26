@@ -1,0 +1,753 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MathMaster — Математический тренажер</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+      body {
+          font-family: 'Inter', sans-serif;
+          background-color: #f8fafc;
+          color: #1e293b;
+      }
+      .glass-card {
+          background: rgba(255, 255, 255, 0.95);
+          backdrop-filter: blur(10px);
+          border: 1px solid rgba(255, 255, 255, 0.2);
+          box-shadow: 0 4px 15px -3px rgba(0, 0, 0, 0.07);
+      }
+      .btn-primary {
+          background: #4f46e5;
+          color: white;
+          transition: all 0.2s;
+      }
+      .btn-primary:hover {
+          background: #4338ca;
+          transform: translateY(-1px);
+      }
+      .fade-in {
+          animation: fadeIn 0.3s ease-out;
+      }
+      @keyframes fadeIn {
+          from { opacity: 0; transform: translateY(10px); }
+          to { opacity: 1; transform: translateY(0); }
+      }
+      ::-webkit-scrollbar {
+          width: 6px;
+      }
+      ::-webkit-scrollbar-thumb {
+          background: #cbd5e1;
+          border-radius: 10px;
+      }
+      .toast {
+          position: fixed;
+          bottom: 2rem;
+          right: 2rem;
+          padding: 1rem 2rem;
+          border-radius: 1rem;
+          background: #1e293b;
+          color: white;
+          z-index: 2000;
+          display: none;
+          animation: fadeIn 0.3s ease-out;
+      }
+    </style>
+  </head>
+  <body class="min-h-screen text-slate-800">
+    <div id="toast" class="toast shadow-2xl"></div>
+
+    <div id="app">
+      <!-- Навигация -->
+      <nav class="bg-white border-b border-slate-200 sticky top-0 z-50">
+        <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div class="flex justify-between h-16 items-center">
+            <div
+              class="flex items-center cursor-pointer"
+              onclick="app.view = 'home'; app.render()"
+            >
+              <svg
+                class="w-8 h-8 text-indigo-600"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"
+                ></path>
+              </svg>
+              <span
+                class="ml-2 text-xl font-bold tracking-tight text-indigo-900"
+                >MathMaster</span
+              >
+            </div>
+            <div class="space-x-4 flex items-center" id="nav-links">
+              <!-- Ссылки будут рендериться динамически -->
+            </div>
+          </div>
+        </div>
+      </nav>
+
+      <!-- Контент -->
+      <main class="max-w-6xl mx-auto px-4 py-8" id="main-content">
+        <!-- Динамическое содержимое здесь -->
+      </main>
+    </div>
+
+    <script>
+      const app = {
+          view: 'home',
+          selectedClass: null,
+          selectedTopic: null,
+          currentVariant: null,
+          editingTaskId: null,
+          variantBuilderTasks: [], // IDs выбранных задач для конструктора вариантов
+          currentUser: JSON.parse(localStorage.getItem('math_user')) || null,
+          ADMIN_SECRET_KEY: '2008',
+
+          db: {
+              tasks: JSON.parse(localStorage.getItem('math_tasks')) || [
+                  { id: 1, grade: 5, topic: 'Дроби', text: 'Вычислите: 1/2 + 1/4', answer: '0.75', solution: 'Приведем к общему знаменателю 4: 2/4 + 1/4 = 3/4 = 0.75.' },
+                  { id: 2, grade: 9, topic: 'Уравнения', text: 'Найдите корень: x² - 5x + 6 = 0', answer: '2,3', solution: 'По теореме Виета x1 + x2 = 5, x1 * x2 = 6. Корни 2 и 3.' },
+                  { id: 3, grade: 11, topic: 'Производная', text: 'Найдите производную f(x) = x³ в точке x=1', answer: '3', solution: 'f\'(x) = 3x². При x=1: 3 * 1² = 3.' }
+              ],
+              variants: JSON.parse(localStorage.getItem('math_variants')) || [],
+              results: JSON.parse(localStorage.getItem('math_results')) || [],
+              users: JSON.parse(localStorage.getItem('math_users_db')) || []
+          },
+
+          showNotification(msg) {
+              const toast = document.getElementById('toast');
+              toast.innerText = msg;
+              toast.style.display = 'block';
+              setTimeout(() => { toast.style.display = 'none'; }, 3000);
+          },
+
+          saveToDB() {
+              localStorage.setItem('math_tasks', JSON.stringify(this.db.tasks));
+              localStorage.setItem('math_variants', JSON.stringify(this.db.variants));
+              localStorage.setItem('math_results', JSON.stringify(this.db.results));
+              localStorage.setItem('math_users_db', JSON.stringify(this.db.users));
+              localStorage.setItem('math_user', JSON.stringify(this.currentUser));
+          },
+
+          renderNav() {
+              const nav = document.getElementById('nav-links');
+              if (!this.currentUser) {
+                  nav.innerHTML = `<button onclick="app.view = 'auth'; app.render()" class="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-bold">Войти</button>`;
+                  return;
+              }
+
+              nav.innerHTML = `
+                  <button onclick="app.view = 'create'; app.render()" class="hidden sm:block text-sm font-medium text-slate-600 hover:text-indigo-600">+ Задача</button>
+                  <button onclick="app.view = 'variants'; app.render()" class="hidden sm:block text-sm font-medium text-slate-600 hover:text-indigo-600">Варианты</button>
+                  <button onclick="app.view = 'solve_variant'; app.render()" class="px-3 py-1.5 bg-indigo-50 text-indigo-700 rounded-lg text-sm font-bold">Решить вариант</button>
+                  <div class="flex items-center space-x-2 ml-4 border-l pl-4 border-slate-200">
+                      <div class="text-right hidden md:block">
+                          <div class="text-xs font-bold text-slate-900">${this.currentUser.firstName}</div>
+                          <div class="text-[10px] text-slate-500 uppercase">${this.currentUser.role === 'admin' ? 'Администратор' : 'Ученик'}</div>
+                      </div>
+                      <button onclick="app.logout()" class="p-1.5 text-slate-400 hover:text-red-500">
+                          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
+                      </button>
+                  </div>
+              `;
+          },
+
+          logout() {
+              this.currentUser = null;
+              this.saveToDB();
+              this.view = 'home';
+              this.render();
+          },
+
+          render() {
+              this.renderNav();
+              const main = document.getElementById('main-content');
+              main.innerHTML = '';
+
+              if (!this.currentUser && this.view !== 'home' && this.view !== 'auth') {
+                  this.view = 'auth';
+              }
+
+              switch(this.view) {
+                  case 'auth': this.renderAuth(main); break;
+                  case 'home': this.renderHome(main); break;
+                  case 'topic_list': this.renderTopicList(main); break;
+                  case 'tasks': this.renderTasks(main); break;
+                  case 'create': this.editingTaskId = null; this.renderCreateTask(main); break;
+                  case 'edit': this.renderCreateTask(main); break;
+                  case 'variants': this.renderVariants(main); break;
+                  case 'create_variant_form': this.renderCreateVariantForm(main); break;
+                  case 'solve_variant': this.renderSolveVariant(main); break;
+              }
+          },
+
+          renderAuth(container) {
+              container.innerHTML = `
+                <div class="max-w-md mx-auto fade-in">
+                    <div class="glass-card p-8 rounded-3xl">
+                        <h2 class="text-2xl font-bold mb-6 text-center">Регистрация / Вход</h2>
+                        <div class="space-y-4">
+                            <input id="auth-phone" type="tel" placeholder="Номер телефона" class="w-full border border-slate-200 p-3 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500">
+                            <input id="auth-first" type="text" placeholder="Имя" class="w-full border border-slate-200 p-3 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500">
+                            <input id="auth-last" type="text" placeholder="Фамилия" class="w-full border border-slate-200 p-3 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500">
+
+                            <div class="flex items-center space-x-2 py-2">
+                                <input type="checkbox" id="auth-is-admin" class="w-4 h-4 text-indigo-600" onchange="document.getElementById('admin-key-section').classList.toggle('hidden', !this.checked)">
+                                <label for="auth-is-admin" class="text-sm text-slate-600">Регистрация как Администратор</label>
+                            </div>
+
+                            <div id="admin-key-section" class="hidden space-y-2 fade-in">
+                                <label class="text-xs font-bold text-slate-400 uppercase">Секретный код</label>
+                                <input id="auth-key" type="password" placeholder="••••" class="w-full border border-slate-200 p-3 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500">
+                            </div>
+
+                            <button onclick="app.handleAuth()" class="w-full btn-primary py-3 rounded-xl font-bold shadow-lg shadow-indigo-200">Продолжить</button>
+                        </div>
+                    </div>
+                </div>
+              `;
+          },
+
+          handleAuth() {
+              const phone = document.getElementById('auth-phone').value.trim();
+              const firstName = document.getElementById('auth-first').value.trim();
+              const lastName = document.getElementById('auth-last').value.trim();
+              const isAdmin = document.getElementById('auth-is-admin').checked;
+              const adminKey = document.getElementById('auth-key').value.trim();
+
+              if (!phone || !firstName || !lastName) return this.showNotification('Заполните все поля');
+
+              if (isAdmin && adminKey !== this.ADMIN_SECRET_KEY) {
+                  return this.showNotification('Неверный код администратора');
+              }
+
+              let user = this.db.users.find(u => u.phone === phone);
+              if (!user) {
+                  user = { phone, firstName, lastName, role: isAdmin ? 'admin' : 'user' };
+                  this.db.users.push(user);
+              } else if (isAdmin) {
+                  user.role = 'admin';
+              }
+
+              this.currentUser = user;
+              this.saveToDB();
+              this.showNotification(`Добро пожаловать, ${firstName}!`);
+              this.view = 'home';
+              this.render();
+          },
+
+          renderHome(container) {
+              this.currentVariant = null;
+              container.innerHTML = `
+                  <div class="text-center mb-12 fade-in">
+                      <h1 class="text-4xl font-extrabold text-slate-900 mb-4">Математический тренажер</h1>
+                      <p class="text-slate-500 max-w-xl mx-auto">Выберите класс и тему для тренировки или введите код варианта.</p>
+                  </div>
+                  <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4 fade-in">
+                      ${[5,6,7,8,9,10,11].map(grade => `
+                          <button onclick="app.selectedClass = ${grade}; app.view = 'topic_list'; app.render();"
+                              class="glass-card p-6 rounded-2xl border-2 border-transparent hover:border-indigo-500 hover:shadow-lg transition-all text-2xl font-bold text-slate-700">
+                              ${grade}
+                          </button>
+                      `).join('')}
+                  </div>
+              `;
+          },
+
+          renderTopicList(container) {
+              const topics = [...new Set(this.db.tasks.filter(t => t.grade == this.selectedClass).map(t => t.topic))];
+              container.innerHTML = `
+                  <div class="mb-6 flex items-center space-x-2 fade-in">
+                      <button onclick="app.view = 'home'; app.render()" class="text-indigo-600 font-medium whitespace-nowrap">← Назад</button>
+                      <span class="text-slate-400">/</span>
+                      <span class="font-bold">${this.selectedClass} класс</span>
+                  </div>
+                  <h2 class="text-2xl font-bold mb-6 fade-in">Темы заданий</h2>
+                  <div class="grid grid-cols-1 md:grid-cols-2 gap-4 fade-in">
+                      ${topics.length ? topics.map(topic => `
+                          <button onclick="app.selectedTopic = '${topic}'; app.view = 'tasks'; app.render();"
+                              class="bg-white p-5 rounded-xl border border-slate-200 text-left hover:border-indigo-400 transition flex justify-between items-center">
+                              <span class="font-medium">${topic}</span>
+                              <span class="text-slate-400">${this.db.tasks.filter(t => t.topic === topic && t.grade == this.selectedClass).length} задач</span>
+                          </button>
+                      `).join('') : '<p class="text-slate-500">Задачи не найдены.</p>'}
+                  </div>
+              `;
+          },
+
+          renderTasks(container, variantTasks = null) {
+              const source = variantTasks || this.db.tasks.filter(t => t.grade == this.selectedClass && t.topic == this.selectedTopic);
+              const isAdmin = this.currentUser && this.currentUser.role === 'admin';
+              const isVariantMode = !!this.currentVariant;
+
+              container.innerHTML = `
+                  <div class="mb-6 flex items-center space-x-2 fade-in">
+                      <button onclick="app.view = 'home'; app.render()" class="text-indigo-600 font-medium">${isVariantMode ? '← Отказаться от решения' : '← К темам'}</button>
+                      ${this.selectedTopic && !isVariantMode ? ` <span class="text-slate-400">/</span> <span class="font-bold">${this.selectedTopic}</span>` : ''}
+                  </div>
+                  ${isVariantMode ? `<div class="bg-indigo-600 text-white p-4 rounded-xl mb-6 flex justify-between items-center"><div>Вариант #${this.currentVariant.id}</div><div class="text-sm opacity-80 font-medium">Ответы будут проверены после завершения задания</div></div>` : ''}
+                  <div class="space-y-6">
+                      ${source.length ? source.map((task, idx) => `
+                          <div class="glass-card p-6 rounded-2xl fade-in relative group">
+                              <div class="flex justify-between items-start mb-4">
+                                  <span class="bg-indigo-100 text-indigo-700 px-3 py-1 rounded-full text-xs font-bold uppercase">Задача #${idx + 1}</span>
+                                  ${isAdmin && !isVariantMode ? `
+                                    <div class="flex space-x-2">
+                                        <button onclick="app.editTask(${task.id})" class="p-1.5 text-slate-400 hover:text-indigo-600 transition"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+                                        <button onclick="app.deleteTask(${task.id})" class="p-1.5 text-slate-400 hover:text-red-600 transition"><svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+                                    </div>
+                                  ` : ''}
+                              </div>
+                              <div class="text-lg text-slate-800 mb-6">${task.text}</div>
+                              <div class="flex flex-wrap gap-3 items-center">
+                                  <input type="text" placeholder="Ваш ответ" id="input-${task.id}" class="border border-slate-200 rounded-lg px-4 py-2 focus:ring-2 focus:ring-indigo-500 outline-none w-full sm:w-auto">
+                                  ${!isVariantMode ? `<button onclick="app.checkAnswer(${task.id})" class="btn-primary px-6 py-2 rounded-lg font-medium">Проверить</button>` : ''}
+                              </div>
+                              <div id="feedback-${task.id}" class="mt-4 hidden p-4 rounded-xl"></div>
+                          </div>
+                      `).join('') : '<div class="text-center py-12 text-slate-400">Задачи не найдены</div>'}
+                  </div>
+                  ${isVariantMode ? `<button onclick="app.finishVariant()" class="mt-8 w-full py-4 bg-emerald-500 text-white rounded-xl font-bold hover:bg-emerald-600 shadow-lg">Завершить и посмотреть результат</button>` : ''}
+              `;
+          },
+
+          checkAnswer(taskId) {
+              const task = this.db.tasks.find(t => t.id === taskId);
+              const input = document.getElementById(`input-${taskId}`);
+              const feedback = document.getElementById(`feedback-${taskId}`);
+              const val = input.value.trim().toLowerCase().replace(/ /g, '').replace(',', '.');
+              const correctVal = task.answer.toString().toLowerCase().replace(/ /g, '').replace(',', '.');
+
+              feedback.classList.remove('hidden', 'bg-red-50', 'bg-green-50', 'text-red-700', 'text-green-700');
+
+              if (val === correctVal) {
+                  feedback.classList.add('bg-green-50', 'text-green-700');
+                  feedback.innerHTML = `<b>Верно!</b>`;
+              } else {
+                  feedback.classList.add('bg-red-50', 'text-red-700');
+                  feedback.innerHTML = `
+                      <div class="font-bold mb-1">Неверно.</div>
+                      <div class="text-sm">Правильный ответ: ${task.answer}</div>
+                      <div class="text-sm mt-2 p-3 bg-white/50 border border-red-200 rounded-lg"><b>Решение:</b> ${task.solution}</div>
+                  `;
+              }
+              feedback.classList.remove('hidden');
+          },
+
+          finishVariant() {
+              const report = [];
+              let score = 0;
+
+              this.currentVariant.taskIds.forEach(tid => {
+                  const task = this.db.tasks.find(t => t.id === tid);
+                  const input = document.getElementById(`input-${tid}`);
+                  const userVal = input ? input.value.trim().toLowerCase().replace(/ /g, '').replace(',', '.') : '';
+                  const correctVal = task.answer.toString().toLowerCase().replace(/ /g, '').replace(',', '.');
+
+                  const isCorrect = userVal === correctVal;
+                  if (isCorrect) score++;
+
+                  report.push({
+                      taskId: tid,
+                      taskText: task.text,
+                      userAnswer: input ? input.value : '',
+                      correctAnswer: task.answer,
+                      solution: task.solution,
+                      isCorrect
+                  });
+              });
+
+              const resultData = {
+                  variantId: this.currentVariant.id,
+                  userName: `${this.currentUser.firstName} ${this.currentUser.lastName}`,
+                  timestamp: new Date().toLocaleString(),
+                  score: `${score}/${report.length}`,
+                  details: report
+              };
+
+              this.db.results.push(resultData);
+              this.saveToDB();
+
+              this.showSummaryForUser(resultData);
+              this.currentVariant = null;
+          },
+
+          showSummaryForUser(res) {
+              const main = document.getElementById('main-content');
+              main.innerHTML = `
+                  <div class="max-w-2xl mx-auto fade-in">
+                      <div class="text-center mb-8">
+                          <div class="inline-block p-4 bg-indigo-100 rounded-full mb-4">
+                            <svg class="w-12 h-12 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                          </div>
+                          <h2 class="text-3xl font-bold">Результаты варианта #${res.variantId}</h2>
+                          <p class="text-xl text-slate-500 mt-2">Верных ответов: <span class="text-indigo-600 font-bold">${res.score}</span></p>
+                      </div>
+
+                      <div class="space-y-4">
+                          ${res.details.map((task, i) => `
+                              <div class="bg-white border ${task.isCorrect ? 'border-green-200' : 'border-red-200'} p-6 rounded-2xl">
+                                  <div class="flex justify-between mb-2">
+                                      <span class="font-bold text-sm">Задача ${i+1}</span>
+                                      <span class="px-2 py-0.5 rounded text-xs font-bold uppercase ${task.isCorrect ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}">${task.isCorrect ? 'Верно' : 'Ошибка'}</span>
+                                  </div>
+                                  <p class="text-slate-700 mb-4">${task.taskText}</p>
+                                  <div class="text-sm grid grid-cols-2 gap-4">
+                                      <div class="p-3 bg-slate-50 rounded-lg"><b>Твой ответ:</b> ${task.userAnswer || '—'}</div>
+                                      <div class="p-3 bg-indigo-50 rounded-lg"><b>Верный:</b> ${task.correctAnswer}</div>
+                                  </div>
+                                  ${!task.isCorrect ? `<div class="mt-4 p-4 bg-orange-50 border border-orange-100 rounded-xl text-xs text-orange-900"><b>Разбор:</b> ${task.solution}</div>` : ''}
+                              </div>
+                          `).join('')}
+                      </div>
+
+                      <button onclick="app.view = 'home'; app.render()" class="mt-10 w-full py-4 btn-primary rounded-xl font-bold">Вернуться на главную</button>
+                  </div>
+              `;
+          },
+
+          showResults(vId) {
+              const results = this.db.results.filter(r => r.variantId == vId);
+              let content = results.length > 0
+                  ? results.map((r, ri) => `
+                    <div class="mb-4 border border-slate-100 rounded-2xl overflow-hidden shadow-sm">
+                        <button onclick="document.getElementById('res-det-${ri}').classList.toggle('hidden')" class="w-full flex items-center justify-between p-4 bg-white hover:bg-slate-50 transition">
+                            <div class="text-left">
+                                <div class="font-bold text-slate-900">${r.userName}</div>
+                                <div class="text-xs text-slate-400">${r.timestamp}</div>
+                            </div>
+                            <div class="flex items-center">
+                                <span class="text-indigo-600 font-black mr-4">${r.score}</span>
+                                <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                            </div>
+                        </button>
+                        <div id="res-det-${ri}" class="hidden bg-slate-50 p-4 border-t border-slate-100 text-sm space-y-3">
+                            ${r.details.map((d, di) => `
+                                <div class="flex justify-between items-start">
+                                    <span class="text-slate-500 shrink-0 w-8 font-bold">${di+1}.</span>
+                                    <span class="flex-1">${d.taskText.substring(0, 50)}...</span>
+                                    <span class="font-medium ${d.isCorrect ? 'text-green-600' : 'text-red-500'}">${d.userAnswer || '—'}</span>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>`).join('')
+                  : '<p class="text-slate-400 py-10 text-center uppercase text-xs font-bold tracking-widest">Нет данных</p>';
+
+              const modalOverlay = document.createElement('div');
+              modalOverlay.className = 'fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-[1001] fade-in';
+              modalOverlay.innerHTML = `
+                  <div class="bg-white rounded-[2rem] p-8 max-w-xl w-full shadow-2xl relative">
+                      <button onclick="this.closest('.fixed').remove()" class="absolute top-6 right-6 p-2 text-slate-400 hover:text-red-500">✕</button>
+                      <div class="mb-6">
+                          <h3 class="text-2xl font-black">Отчеты по варианту #${vId}</h3>
+                      </div>
+                      <div class="max-h-[60vh] overflow-y-auto pr-2">${content}</div>
+                  </div>
+              `;
+              document.body.appendChild(modalOverlay);
+          }
+
+          ,renderVariants(container) {
+              const myVariants = this.db.variants.filter(v => v.creatorPhone === this.currentUser.phone);
+              container.innerHTML = `
+                  <div class="flex justify-between items-center mb-8 fade-in">
+                      <h2 class="text-3xl font-bold">Управление Вариантами</h2>
+                      <button onclick="app.variantBuilderTasks = []; app.view = 'create_variant_form'; app.render()" class="btn-primary px-6 py-2 rounded-lg font-bold">+ Свой вариант</button>
+                  </div>
+
+                  <div class="grid grid-cols-1 md:grid-cols-2 gap-6 fade-in">
+                      ${myVariants.length ? myVariants.map(v => {
+                          const solveCount = this.db.results.filter(r => r.variantId == v.id).length;
+                          return `
+                          <div class="glass-card p-6 rounded-2xl group transition-all hover:border-indigo-200">
+                              <div class="flex justify-between items-center mb-4">
+                                  <div class="text-2xl font-black text-indigo-600 tracking-wider">#${v.id}</div>
+                                  <div class="bg-indigo-50 text-indigo-600 px-3 py-1 rounded-lg text-xs font-bold">${v.taskIds.length} задач</div>
+                              </div>
+                              <div class="mb-6 h-12 overflow-hidden">
+                                  <div class="text-xs font-bold uppercase text-slate-400 mb-1">Краткий список тем:</div>
+                                  <div class="text-xs text-slate-500 italic">
+                                      ${v.taskIds.map(tid => this.db.tasks.find(t=>t.id===tid)?.topic || '...').join(', ')}
+                                  </div>
+                              </div>
+                              <div class="pt-4 border-t border-slate-100 flex justify-between items-center">
+                                  <span class="text-sm text-slate-500">Решено: <b class="text-slate-900">${solveCount} раз</b></span>
+                                  <div class="flex space-x-2">
+                                      <button onclick="app.deleteVariant(${v.id})" class="p-1.5 text-slate-400 hover:text-red-500 transition" title="Удалить вариант">
+                                          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                                      </button>
+                                      <button onclick="app.showResults(${v.id})" class="btn-primary px-5 py-1.5 rounded-lg text-xs font-bold">Отчеты</button>
+                                  </div>
+                              </div>
+                          </div>
+                      `;}).reverse().join('') : `<div class="col-span-2 text-center py-20 bg-slate-50 rounded-3xl border-2 border-dashed border-slate-200">
+                          <p class="text-slate-400">Вы еще не создали ни одного варианта</p>
+                      </div>`}
+                  </div>
+              `;
+          },
+
+          deleteVariant(id) {
+              if (!confirm(`Удалить вариант #${id} и все связанные с ним результаты?`)) return;
+              this.db.variants = this.db.variants.filter(v => v.id !== id);
+              this.db.results = this.db.results.filter(r => r.variantId != id);
+              this.saveToDB();
+              this.showNotification(`Вариант #${id} успешно удален`);
+              this.render();
+          },
+
+          renderCreateVariantForm(container) {
+              container.innerHTML = `
+                  <div class="max-w-4xl mx-auto fade-in">
+                      <button onclick="app.view = 'variants'; app.render()" class="mb-6 text-indigo-600 font-medium whitespace-nowrap">← Вернуться к вариантам</button>
+
+                      <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                          <!-- Левая колонка: Процесс создания -->
+                          <div class="lg:col-span-2 space-y-6">
+                              <div class="glass-card p-6 rounded-3xl">
+                                  <h2 class="text-xl font-bold mb-4 flex items-center">
+                                      <span class="bg-indigo-600 text-white w-6 h-6 rounded-full text-xs flex items-center justify-center mr-2">1</span>
+                                      Добавить задачи из базы
+                                  </h2>
+                                  <div class="relative mb-4">
+                                      <input type="text" placeholder="Поиск по тексту задачи..." id="task-search" oninput="app.filterPicker()" class="w-full pl-10 pr-4 py-2 border rounded-xl outline-none focus:ring-2 focus:ring-indigo-500">
+                                      <svg class="w-5 h-5 absolute left-3 top-2.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                                  </div>
+                                  <div class="max-h-[300px] overflow-y-auto space-y-2 pr-2" id="picker-list">
+                                      ${this.renderPickerList()}
+                                  </div>
+                              </div>
+
+                              <div class="glass-card p-6 rounded-3xl">
+                                  <h2 class="text-xl font-bold mb-4 flex items-center text-emerald-600">
+                                      <span class="bg-emerald-600 text-white w-6 h-6 rounded-full text-xs flex items-center justify-center mr-2">2</span>
+                                      Написать свою задачу
+                                  </h2>
+                                  <div class="space-y-4">
+                                      <div class="grid grid-cols-2 gap-4">
+                                          <select id="q-grade" class="border p-2 rounded-lg text-sm bg-slate-50">
+                                              <option value="5">5 класс</option><option value="6">6 класс</option>
+                                              <option value="7">7 класс</option><option value="8">8 класс</option>
+                                              <option value="9">9 класс</option><option value="10">10 класс</option>
+                                              <option value="11">11 класс</option>
+                                          </select>
+                                          <input id="q-topic" type="text" placeholder="Тема" class="border p-2 rounded-lg text-sm bg-slate-50">
+                                      </div>
+                                      <textarea id="q-text" placeholder="Условие задачи" class="w-full border p-2 rounded-lg text-sm bg-slate-50" rows="2"></textarea>
+                                      <input id="q-answer" type="text" placeholder="Правильный ответ" class="w-full border p-2 rounded-lg text-sm bg-slate-50">
+                                      <textarea id="q-solution" placeholder="Подробное решение (увидит ученик после завершения)" class="w-full border p-2 rounded-lg text-sm bg-slate-50" rows="3"></textarea>
+                                      <button onclick="app.quickAddTask()" class="w-full bg-emerald-100 text-emerald-700 py-3 rounded-lg font-bold text-sm hover:bg-emerald-200 transition">+ В базу и вариант</button>
+                                  </div>
+                              </div>
+                          </div>
+
+                          <!-- Правая колонка: Итог -->
+                          <div class="lg:col-span-1">
+                              <div class="glass-card p-6 rounded-3xl sticky top-24">
+                                  <h3 class="text-lg font-bold mb-4">Ваш вариант</h3>
+                                  <div id="builder-preview" class="mb-6 space-y-2">
+                                      ${this.renderBuilderPreview()}
+                                  </div>
+                                  <button onclick="app.finaliseVariant()" class="w-full btn-primary py-4 rounded-xl font-bold shadow-indigo-100">
+                                      Создать вариант #${Math.floor(1000 + Math.random() * 9000)}
+                                  </button>
+                                  <p class="text-[10px] text-center text-slate-400 mt-4 uppercase font-bold tracking-widest">Код сгенерируется автоматически</p>
+                              </div>
+                          </div>
+                      </div>
+                  </div>
+              `;
+          },
+
+          renderPickerList(search = '') {
+              const filtered = this.db.tasks.filter(t => t.text.toLowerCase().includes(search.toLowerCase()));
+              return filtered.map(t => {
+                  const isSelected = this.variantBuilderTasks.includes(t.id);
+                  return `
+                      <div class="flex items-center justify-between p-3 border rounded-xl hover:bg-slate-50 transition ${isSelected ? 'border-indigo-500 bg-indigo-50' : 'border-slate-100'}">
+                          <div class="text-xs">
+                              <div class="font-bold text-indigo-600">${t.grade} кл — ${t.topic}</div>
+                              <div class="text-slate-600 line-clamp-1">${t.text}</div>
+                          </div>
+                          <button onclick="app.toggleTaskInBuilder(${t.id})" class="p-1">
+                              ${isSelected
+                                  ? '<svg class="w-6 h-6 text-indigo-600" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>'
+                                  : '<svg class="w-6 h-6 text-slate-200" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V7z" clip-rule="evenodd"/></svg>'}
+                          </button>
+                      </div>
+                  `;
+              }).join('') || '<div class="text-center text-slate-400 py-4 text-xs">Задачи не найдены</div>';
+          },
+
+          filterPicker() {
+              const search = document.getElementById('task-search').value;
+              document.getElementById('picker-list').innerHTML = this.renderPickerList(search);
+          },
+
+          toggleTaskInBuilder(id) {
+              const idx = this.variantBuilderTasks.indexOf(id);
+              if (idx > -1) this.variantBuilderTasks.splice(idx, 1);
+              else this.variantBuilderTasks.push(id);
+              this.renderCreateVariantForm(document.getElementById('main-content'));
+          },
+
+          renderBuilderPreview() {
+              if(!this.variantBuilderTasks.length) return '<div class="text-sm text-slate-400 py-8 text-center italic">Добавьте хотя бы одну задачу</div>';
+              return this.variantBuilderTasks.map((tid, idx) => {
+                  const t = this.db.tasks.find(x => x.id === tid);
+                  return `<div class="text-xs flex justify-between items-center p-2 bg-slate-50 rounded-lg">
+                      <span class="text-slate-400 font-bold w-4">${idx+1}.</span>
+                      <span class="flex-1 truncate mx-2">${t ? t.text : 'Задача удалена'}</span>
+                      <button onclick="app.toggleTaskInBuilder(${tid})" class="text-red-400 hover:text-red-600">✕</button>
+                  </div>`;
+              }).join('');
+          },
+
+          quickAddTask() {
+              const grade = document.getElementById('q-grade').value;
+              const topic = document.getElementById('q-topic').value || 'Разное';
+              const text = document.getElementById('q-text').value;
+              const answer = document.getElementById('q-answer').value;
+              const solution = document.getElementById('q-solution').value || 'Разбор не предоставлен.';
+
+              if (!text || !answer) return this.showNotification('Заполните поле условия и ответа!');
+
+              const newTask = {
+                  id: Date.now(),
+                  grade: parseInt(grade),
+                  topic,
+                  text,
+                  answer,
+                  solution
+              };
+
+              this.db.tasks.push(newTask);
+              this.variantBuilderTasks.push(newTask.id);
+              this.saveToDB();
+              this.showNotification('Задача добавлена в базу и в ваш вариант!');
+              this.renderCreateVariantForm(document.getElementById('main-content'));
+          },
+
+          finaliseVariant() {
+              if (this.variantBuilderTasks.length === 0) return this.showNotification('Выберите хотя бы одну задачу!');
+
+              const newVar = {
+                  id: Math.floor(1000 + Math.random() * 9000),
+                  taskIds: [...this.variantBuilderTasks],
+                  creatorPhone: this.currentUser.phone
+              };
+
+              this.db.variants.push(newVar);
+              this.saveToDB();
+              this.showNotification(`Вариант #${newVar.id} успешно создан!`);
+              this.variantBuilderTasks = [];
+              this.view = 'variants';
+              this.render();
+          },
+
+          renderSolveVariant(container) {
+              container.innerHTML = `
+                  <div class="max-w-md mx-auto fade-in">
+                      <div class="glass-card p-8 rounded-[2.5rem] text-center">
+                          <h2 class="text-3xl font-black mb-2">Вход по коду</h2>
+                          <p class="text-slate-500 text-sm mb-8">Введите номер варианта, который выдал вам учитель</p>
+                          <input id="variant-num" type="text" maxlength="4" placeholder="0000" class="w-full text-center text-5xl font-black border-2 border-slate-100 p-6 rounded-3xl mb-8 focus:border-indigo-500 outline-none text-indigo-600 tracking-widest uppercase">
+                          <button onclick="app.loadVariant()" class="w-full btn-primary py-5 rounded-2xl font-black text-lg shadow-lg">НАЧАТЬ ТЕСТ</button>
+                      </div>
+                  </div>
+              `;
+          },
+
+          loadVariant() {
+              const idStr = document.getElementById('variant-num').value;
+              const variant = this.db.variants.find(v => v.id == idStr);
+              if(!variant) return this.showNotification('Вариант не найден!');
+
+              this.currentVariant = variant;
+              const tasks = variant.taskIds.map(tid => this.db.tasks.find(t => t.id === tid)).filter(t => t);
+              this.renderTasks(document.getElementById('main-content'), tasks);
+              this.showNotification(`Тест №${variant.id} запущен`);
+          },
+
+          renderCreateTask(container) {
+              const task = this.editingTaskId ? this.db.tasks.find(t => t.id === this.editingTaskId) : null;
+              container.innerHTML = `
+                  <div class="max-w-2xl mx-auto fade-in">
+                      <h2 class="text-3xl font-bold mb-8">${task ? 'Редактирование' : 'Создание'} задачи</h2>
+                      <div class="glass-card p-8 rounded-3xl space-y-5 ">
+                          <div class="grid grid-cols-2 gap-4">
+                              <div>
+                                  <label class="block text-xs font-bold text-slate-400 mb-2 uppercase">Класс</label>
+                                  <select id="f-grade" class="w-full border border-slate-100 p-3 rounded-xl bg-slate-50 outline-none focus:ring-2 focus:ring-indigo-500 px-4">
+                                      ${[5,6,7,8,9,10,11].map(g => `<option value="${g}" ${task && task.grade == g ? 'selected' : ''}>${g} класс</option>`).join('')}
+                                  </select>
+                              </div>
+                              <div>
+                                  <label class="block text-xs font-bold text-slate-400 mb-2 uppercase">Тема</label>
+                                  <input id="f-topic" type="text" value="${task ? task.topic : ''}" class="w-full border border-slate-100 p-3 rounded-xl bg-slate-50 outline-none focus:ring-2 focus:ring-indigo-500 px-4" placeholder="Дроби">
+                              </div>
+                          </div>
+                          <div>
+                              <label class="block text-xs font-bold text-slate-400 mb-2 uppercase">Условие</label>
+                              <textarea id="f-text" rows="3" class="w-full border border-slate-100 p-3 rounded-xl bg-slate-50 outline-none focus:ring-2 focus:ring-indigo-500 px-4">${task ? task.text : ''}</textarea>
+                          </div>
+                          <div>
+                              <label class="block text-xs font-bold text-slate-400 mb-2 uppercase">Правильный ответ</label>
+                              <input id="f-answer" type="text" value="${task ? task.answer : ''}" class="w-full border border-slate-100 p-3 rounded-xl bg-slate-50 outline-none focus:ring-2 focus:ring-indigo-500 px-4">
+                          </div>
+                          <div>
+                              <label class="block text-xs font-bold text-slate-400 mb-2 uppercase">Подробное решение</label>
+                              <textarea id="f-solution" rows="3" class="w-full border border-slate-100 p-3 rounded-xl bg-slate-50 outline-none focus:ring-2 focus:ring-indigo-500 px-4">${task ? task.solution : ''}</textarea>
+                          </div>
+                          <button onclick="app.saveTask()" class="w-full btn-primary py-4 rounded-xl font-bold shadow-lg mt-4">${task ? 'Сохранить изменения' : 'Создать задачу'}</button>
+                      </div>
+                  </div>
+              `;
+          },
+
+          saveTask() {
+              const newTask = {
+                  id: this.editingTaskId || Date.now(),
+                  grade: parseInt(document.getElementById('f-grade').value),
+                  topic: document.getElementById('f-topic').value || 'Общая',
+                  text: document.getElementById('f-text').value,
+                  answer: document.getElementById('f-answer').value,
+                  solution: document.getElementById('f-solution').value
+              };
+              if(!newTask.text || !newTask.answer) return this.showNotification('Заполните обязательные поля');
+              if (this.editingTaskId) {
+                  const idx = this.db.tasks.findIndex(t => t.id === this.editingTaskId);
+                  this.db.tasks[idx] = newTask;
+              } else {
+                  this.db.tasks.push(newTask);
+              }
+              this.saveToDB();
+              this.showNotification('Готово!');
+              this.view = 'home';
+              this.render();
+          },
+
+          deleteTask(id) {
+              if (!confirm('Удалить эту задачу?')) return;
+              this.db.tasks = this.db.tasks.filter(t => t.id !== id);
+              this.saveToDB();
+              this.render();
+          },
+
+          editTask(id) {
+              this.editingTaskId = id;
+              this.view = 'edit';
+              this.render();
+          }
+      };
+
+      app.render();
+    </script>
+  </body>
+</html>
