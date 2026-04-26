@@ -543,7 +543,7 @@
                                       <textarea id="q-text" placeholder="Условие задачи" class="w-full border p-2 rounded-lg text-sm bg-slate-50" rows="2"></textarea>
                                       <input id="q-answer" type="text" placeholder="Правильный ответ" class="w-full border p-2 rounded-lg text-sm bg-slate-50">
                                       <textarea id="q-solution" placeholder="Подробное решение (увидит ученик после завершения)" class="w-full border p-2 rounded-lg text-sm bg-slate-50" rows="3"></textarea>
-                                      <button onclick="app.quickAddTask()" class="w-full bg-emerald-100 text-emerald-700 py-3 rounded-lg font-bold text-sm hover:bg-emerald-200 transition">+ В базу и вариант</button>
+                                      <button onclick="app.quickAddTask()" class="w-full bg-emerald-100 text-emerald-700 py-3 rounded-lg font-bold text-sm hover:bg-emerald-200 transition">+ Добавить</button>
                                   </div>
                               </div>
                           </div>
@@ -631,7 +631,7 @@
               this.db.tasks.push(newTask);
               this.variantBuilderTasks.push(newTask.id);
               this.saveToDB();
-              this.showNotification('Задача добавлена в базу и в ваш вариант!');
+              this.showNotification('Задача добавлена!');
               this.renderCreateVariantForm(document.getElementById('main-content'));
           },
 
